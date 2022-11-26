@@ -1,22 +1,10 @@
 <script lang="ts">
-	// import Stats from 'stats.js';
-	// import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js';
-	// could use tweakpane instead
 	import * as THREE from 'three';
 	import { OrbitControls, T, useThrelte } from '@threlte/core';
 	import Dungeon from './Dungeon.svelte';
 	import Player from './Player1.svelte';
 
 	const { scene } = useThrelte();
-
-	const params = {
-		firstPerson: false,
-		gravity: -30,
-		playerSpeed: 10,
-		physicsSteps: 5
-		// reset: reset
-	};
-
 	const bgColor = 0x263238 / 2;
 	const PI_2 = Math.PI / 2;
 

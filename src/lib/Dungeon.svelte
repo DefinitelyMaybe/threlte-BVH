@@ -1,12 +1,12 @@
 <script lang="ts">
-	// import * as THREE from 'three';
-	import { T, Three, useThrelte, Object3DInstance } from '@threlte/core';
+	import { Object3DInstance } from '@threlte/core';
 	import { useGltf } from '@threlte/extras';
 	import { AutoColliders } from '@threlte/rapier';
 
 	const { gltf } = useGltf('/dungeon.glb');
 
 	$: dungeonModel = $gltf?.scene;
+	$: console.log($gltf);
 </script>
 
 {#if dungeonModel}
