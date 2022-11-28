@@ -32,16 +32,16 @@
 	// 	controls.maxDistance = 1e-4;
 	// }
 
-	useFrame((_ctx, delta) => {
-		// console.log(delta);
-		// const physicsSteps = params.physicsSteps;
-		// for (let i = 0; i < physicsSteps; i++) {
-		// 	updatePlayer(delta / physicsSteps);
-		// }
-		if (player) {
-			updatePlayer(delta);
-		}
-	});
+	// useFrame((_ctx, delta) => {
+	// 	// console.log(delta);
+	// 	// const physicsSteps = params.physicsSteps;
+	// 	// for (let i = 0; i < physicsSteps; i++) {
+	// 	// 	updatePlayer(delta / physicsSteps);
+	// 	// }
+	// 	if (player) {
+	// 		updatePlayer(delta);
+	// 	}
+	// });
 
 	function reset() {
 		// playerVelocity.set(0, 0, 0);
@@ -196,7 +196,7 @@
 
 <svelte:window on:keyup={handleKeyup} on:keydown={handleKeydown} />
 
-<T.Mesh position.y={0.5} castShadow receiveShadow ref={player}>
+<T.Mesh position.y={0.5} castShadow receiveShadow bind:ref={player}>
 	<!-- Add interaction -->
 	<!-- <InteractiveObject
     object={ref}
