@@ -1,19 +1,16 @@
-<script>
+<script lang="ts">
 	import '../../app.css';
 	import * as THREE from 'three';
+	import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+	import { onMount } from 'svelte';
 
-	import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+	let canvas: HTMLCanvasElement;
+	let renderer: THREE.WebGLRenderer;
+	let content: HTMLDivElement;
 
-	let canvas, renderer;
-
-	const scenes = [];
-
-	// init();
-	// animate();
+	let scenes: THREE.Scene[] = [];
 
 	function init() {
-		canvas = document.getElementById('c');
-
 		const geometries = [
 			new THREE.BoxGeometry(1, 1, 1),
 			new THREE.SphereGeometry(0.5, 12, 8),
@@ -21,9 +18,7 @@
 			new THREE.CylinderGeometry(0.5, 0.5, 1, 12)
 		];
 
-		const content = document.getElementById('content');
-
-		for (let i = 0; i < 40; i++) {
+		for (let i = 0; i < 10; i++) {
 			const scene = new THREE.Scene();
 
 			// make a list item
@@ -31,6 +26,8 @@
 			element.className = 'list-item';
 
 			const sceneElement = document.createElement('div');
+			sceneElement.style.width = '200px';
+			sceneElement.style.height = '200px';
 			element.appendChild(sceneElement);
 
 			const descriptionElement = document.createElement('div');
@@ -72,10 +69,6 @@
 
 			scenes.push(scene);
 		}
-
-		renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-		renderer.setClearColor(0xffffff, 1);
-		renderer.setPixelRatio(window.devicePixelRatio);
 	}
 
 	function updateSize() {
@@ -93,6 +86,7 @@
 	}
 
 	function render() {
+		if (!renderer) return;
 		updateSize();
 
 		canvas.style.transform = `translateY(${window.scrollY}px)`;
@@ -144,59 +138,39 @@
 			renderer.render(scene, camera);
 		});
 	}
+
+	onMount(() => {
+		init();
+		animate();
+		renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+		return () => {
+			scenes = [];
+			renderer.dispose();
+		};
+	});
 </script>
 
 <svelte:head>
 	<title>three.js webgl - multiple elements</title>
-	<meta charset="utf-8" />
 </svelte:head>
 
-<canvas id="c" />
+<canvas class="absolute w-full h-full left-0" bind:this={canvas} />
 
-<div id="content">
+<div class="w-full z-[1] pt-12 top-0 absolute">
 	<div id="info">
 		<a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - multiple elements - webgl
 	</div>
+	<div class="overflow-y-scroll" bind:this={content} />
 </div>
 
 <style>
-	* {
-		box-sizing: border-box;
-		-moz-box-sizing: border-box;
-	}
-
-	body {
-		background-color: #fff;
-		color: #444;
-	}
-
-	a {
-		color: #08f;
-	}
-
-	#content {
-		position: absolute;
-		top: 0;
-		width: 100%;
-		z-index: 1;
-		padding: 3em 0 0 0;
-	}
-
-	#c {
-		position: absolute;
-		left: 0;
-		width: 100%;
-		height: 100%;
-	}
-
 	.list-item {
-		display: inline-block;
 		margin: 1em;
 		padding: 1em;
 		box-shadow: 1px 2px 4px 0px rgba(0, 0, 0, 0.25);
 	}
 
-	.list-item > div:nth-child(1) {
+	.renderdiv {
 		width: 200px;
 		height: 200px;
 	}
