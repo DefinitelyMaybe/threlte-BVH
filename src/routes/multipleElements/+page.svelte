@@ -2,73 +2,94 @@
 	import '../../app.css';
 	import * as THREE from 'three';
 	import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+	import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
 	import { onMount } from 'svelte';
+	import { Vector3 } from 'three';
+
+	THREE.Cache.enabled = true;
 
 	let canvas: HTMLCanvasElement;
 	let renderer: THREE.WebGLRenderer;
 	let content: HTMLDivElement;
+	let content2: HTMLDivElement;
+	let modelPreview: HTMLDivElement;
 
 	let scenes: THREE.Scene[] = [];
 
-	function init() {
-		const geometries = [
-			new THREE.BoxGeometry(1, 1, 1),
-			new THREE.SphereGeometry(0.5, 12, 8),
-			new THREE.DodecahedronGeometry(0.5),
-			new THREE.CylinderGeometry(0.5, 0.5, 1, 12)
-		];
+	const loader = new GLTFLoader();
+	let model: GLTF;
 
-		for (let i = 0; i < 10; i++) {
-			const scene = new THREE.Scene();
+	loader.load('/dungeon.glb', (gltf) => {
+		model = gltf;
+	});
 
-			// make a list item
-			const element = document.createElement('div');
-			element.className = 'list-item';
+	// $: console.log(model);
+	let author = 'unknown';
+	let authorURL = '';
+	let license = 'unknown';
+	let licenseURL = '';
 
-			const sceneElement = document.createElement('div');
-			sceneElement.style.width = '200px';
-			sceneElement.style.height = '200px';
-			element.appendChild(sceneElement);
+	let objects: THREE.Object3D[] = [];
 
-			const descriptionElement = document.createElement('div');
-			descriptionElement.innerText = 'Scene ' + (i + 1);
-			element.appendChild(descriptionElement);
+	const geometries = [
+		new THREE.BoxGeometry(1, 1, 1),
+		new THREE.SphereGeometry(0.5, 12, 8),
+		new THREE.DodecahedronGeometry(0.5),
+		new THREE.CylinderGeometry(0.5, 0.5, 1, 12)
+	];
 
-			// the element that represents the area we want to render the scene
-			scene.userData.element = sceneElement;
-			content.appendChild(element);
+	$: if (model) {
+		let x = model.asset.extras.author.split(' ');
+		author = x[0];
+		authorURL = x[1].slice(1, -1);
 
-			const camera = new THREE.PerspectiveCamera(50, 1, 1, 10);
-			camera.position.z = 2;
-			scene.userData.camera = camera;
+		x = model.asset.extras.license.split(' ');
+		license = x[0];
+		licenseURL = x[1].slice(1, -1);
 
-			const controls = new OrbitControls(scene.userData.camera, scene.userData.element);
-			controls.minDistance = 2;
-			controls.maxDistance = 5;
-			controls.enablePan = false;
-			controls.enableZoom = false;
-			scene.userData.controls = controls;
+		// reducing the size of the initial scene
+		model.scene.scale.setScalar(0.001);
 
-			// add one random mesh to each scene
-			const geometry = geometries[(geometries.length * Math.random()) | 0];
+		const sceneSize = new THREE.Vector3();
 
-			const material = new THREE.MeshStandardMaterial({
-				color: new THREE.Color().setHSL(Math.random(), 1, 0.75),
-				roughness: 0.5,
-				metalness: 0,
-				flatShading: true
-			});
+		// centering the scene
+		const box = new THREE.Box3();
+		box.setFromObject(model.scene);
+		box.getCenter(model.scene.position).negate();
 
-			scene.add(new THREE.Mesh(geometry, material));
+		box.getSize(sceneSize);
+		// const maxDim = Math.max(sceneSize.x, Math.max(sceneSize.y, sceneSize.z));
+		// model.scene.scale.divideScalar(maxDim);
 
-			scene.add(new THREE.HemisphereLight(0xaaaaaa, 0x444444));
+		// TODO-DefinitelyMaybe: I wanna start with getting all the unquie geometry
+		model.scene.traverse((obj) => {
+			if (obj.type == 'Mesh') {
+				const newObj = obj.clone();
 
-			const light = new THREE.DirectionalLight(0xffffff, 0.5);
-			light.position.set(1, 1, 1);
-			scene.add(light);
+				const objSize = new THREE.Vector3();
 
-			scenes.push(scene);
+				const box = new THREE.Box3();
+				box.setFromObject(newObj);
+
+				// sort out position
+				box.getCenter(newObj.position).negate();
+
+				// sort out size
+				box.getSize(objSize);
+
+				const scaledVec = new THREE.Vector3(1, 1, 1).divide(objSize);
+				const scale = Math.min(scaledVec.x, Math.min(scaledVec.y, scaledVec.z));
+
+				newObj.scale.multiplyScalar(scale);
+
+				objects.push(newObj);
+			}
+		});
+		for (let i = 0; i < objects.length; i++) {
+			const element = objects[i];
+			scenes.push(createScene(element, content2));
 		}
+		scenes.push(createScene(model.scene, modelPreview));
 	}
 
 	function updateSize() {
@@ -86,7 +107,7 @@
 	}
 
 	function render() {
-		if (!renderer) return;
+		if (!renderer || !canvas) return;
 		updateSize();
 
 		canvas.style.transform = `translateY(${window.scrollY}px)`;
@@ -98,10 +119,7 @@
 		renderer.setClearColor(0xe0e0e0);
 		renderer.setScissorTest(true);
 
-		scenes.forEach(function (scene) {
-			// so something moves
-			scene.children[0].rotation.y = Date.now() * 0.001;
-
+		scenes.forEach((scene) => {
 			// get the element that is a place holder for where we want to
 			// draw the scene
 			const element = scene.userData.element;
@@ -130,17 +148,69 @@
 
 			const camera = scene.userData.camera;
 
-			//camera.aspect = width / height; // not changing in this example
-			//camera.updateProjectionMatrix();
-
-			//scene.userData.controls.update();
-
 			renderer.render(scene, camera);
 		});
 	}
 
+	function createScene(object: THREE.Object3D, dom: HTMLDivElement) {
+		const scene = new THREE.Scene();
+
+		// make a list item
+		const element = document.createElement('div');
+
+		const sceneElement = document.createElement('div');
+		sceneElement.style.width = '200px';
+		sceneElement.style.height = '200px';
+		element.appendChild(sceneElement);
+
+		const descriptionElement = document.createElement('div');
+		if (object.name) {
+			descriptionElement.innerText = object.name;
+		} else {
+			descriptionElement.innerText = 'Scene';
+		}
+
+		element.appendChild(descriptionElement);
+
+		// the element that represents the area we want to render the scene
+		scene.userData.element = sceneElement;
+		dom.appendChild(element);
+
+		const camera = new THREE.PerspectiveCamera(80, 1, 0.1, 100);
+		camera.position.x = 2;
+		camera.position.y = 2;
+		camera.position.z = 2;
+		camera.lookAt(new Vector3(0, 0, 0));
+		scene.userData.camera = camera;
+
+		const controls = new OrbitControls(scene.userData.camera, scene.userData.element);
+		scene.userData.controls = controls;
+
+		scene.add(object);
+
+		scene.add(new THREE.AmbientLight(0x404040));
+
+		const light = new THREE.DirectionalLight();
+		light.position.set(1, 1, 1);
+		light.lookAt(new THREE.Vector3(0, 0, 0));
+		scene.add(light);
+
+		return scene;
+	}
+
 	onMount(() => {
-		init();
+		for (let i = 0; i < 4; i++) {
+			const geometry = geometries[(geometries.length * Math.random()) | 0];
+
+			const material = new THREE.MeshStandardMaterial({
+				color: new THREE.Color().setHSL(Math.random(), 1, 0.75),
+				roughness: 0.5,
+				metalness: 0,
+				flatShading: true
+			});
+
+			scenes.push(createScene(new THREE.Mesh(geometry, material), content));
+		}
 		animate();
 		renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 		return () => {
@@ -151,7 +221,7 @@
 </script>
 
 <svelte:head>
-	<title>three.js webgl - multiple elements</title>
+	<title>multiple elements</title>
 </svelte:head>
 
 <canvas class="absolute w-full h-full left-0" bind:this={canvas} />
@@ -160,26 +230,21 @@
 	<div id="info">
 		<a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - multiple elements - webgl
 	</div>
-	<div class="overflow-y-scroll" bind:this={content} />
+	<div class="overflow-y-auto grid grid-cols-4" bind:this={content} />
+	<div>
+		<h1>{model?.asset.extras.title ?? 'GLTF'}</h1>
+		<div bind:this={modelPreview} class="w-[200px] h-[200px] mb-4" />
+		<div class="flex flex-col">
+			{#if model}
+				<a href={authorURL}>{author}</a>
+				<div>
+					<a href={model?.asset.extras.source}>source</a> -
+					<a href={licenseURL}>{license}</a>
+				</div>
+			{:else}
+				A GLTF loaded by three.js using threlte
+			{/if}
+		</div>
+		<div class="grid grid-cols-3" bind:this={content2} />
+	</div>
 </div>
-
-<style>
-	.list-item {
-		margin: 1em;
-		padding: 1em;
-		box-shadow: 1px 2px 4px 0px rgba(0, 0, 0, 0.25);
-	}
-
-	.renderdiv {
-		width: 200px;
-		height: 200px;
-	}
-
-	.list-item > div:nth-child(2) {
-		color: #888;
-		font-family: sans-serif;
-		font-size: large;
-		width: 200px;
-		margin-top: 0.5em;
-	}
-</style>
