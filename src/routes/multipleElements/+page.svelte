@@ -3,6 +3,8 @@
 	import * as THREE from 'three';
 	import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 	import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
+	import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+	import { RenderPixelatedPass } from 'three/examples/jsm/postprocessing/RenderPixelatedPass.js';
 	import { onMount } from 'svelte';
 	import { Vector3 } from 'three';
 
@@ -10,6 +12,8 @@
 
 	let canvas: HTMLCanvasElement;
 	let renderer: THREE.WebGLRenderer;
+	let composer: EffectComposer;
+
 	let content: HTMLDivElement;
 	let content2: HTMLDivElement;
 	let modelPreview: HTMLDivElement;
@@ -20,10 +24,10 @@
 	let model: GLTF;
 
 	loader.load('/dungeon.glb', (gltf) => {
+		console.log(gltf);
 		model = gltf;
 	});
 
-	// $: console.log(model);
 	let author = 'unknown';
 	let authorURL = '';
 	let license = 'unknown';
@@ -31,12 +35,14 @@
 
 	let objects: THREE.Object3D[] = [];
 
-	const geometries = [
-		new THREE.BoxGeometry(1, 1, 1),
-		new THREE.SphereGeometry(0.5, 12, 8),
-		new THREE.DodecahedronGeometry(0.5),
-		new THREE.CylinderGeometry(0.5, 0.5, 1, 12)
-	];
+	const geometries = {};
+	const materials = {};
+	// const geometries = [
+	// 	new THREE.BoxGeometry(1, 1, 1),
+	// 	new THREE.SphereGeometry(0.5, 12, 8),
+	// 	new THREE.DodecahedronGeometry(0.5),
+	// 	new THREE.CylinderGeometry(0.5, 0.5, 1, 12)
+	// ];
 
 	$: if (model) {
 		let x = model.asset.extras.author.split(' ');
@@ -62,29 +68,69 @@
 		// model.scene.scale.divideScalar(maxDim);
 
 		// TODO-DefinitelyMaybe: I wanna start with getting all the unquie geometry
-		model.scene.traverse((obj) => {
-			if (obj.type == 'Mesh') {
-				const newObj = obj.clone();
-
-				const objSize = new THREE.Vector3();
-
-				const box = new THREE.Box3();
-				box.setFromObject(newObj);
-
-				// sort out position
-				box.getCenter(newObj.position).negate();
-
-				// sort out size
-				box.getSize(objSize);
-
-				const scaledVec = new THREE.Vector3(1, 1, 1).divide(objSize);
-				const scale = Math.min(scaledVec.x, Math.min(scaledVec.y, scaledVec.z));
-
-				newObj.scale.multiplyScalar(scale);
-
-				objects.push(newObj);
+		model.scene.traverse((obj: THREE.Mesh) => {
+			// if (obj.type == 'Mesh') {
+			// 	const newObj = obj.clone();
+			// 	const objSize = new THREE.Vector3();
+			// 	const box = new THREE.Box3();
+			// 	box.setFromObject(newObj);
+			// 	// sort out position
+			// 	box.getCenter(newObj.position).negate();
+			// 	// sort out size
+			// 	box.getSize(objSize);
+			// 	const scaledVec = new THREE.Vector3(1, 1, 1).divide(objSize);
+			// 	const scale = Math.min(scaledVec.x, Math.min(scaledVec.y, scaledVec.z));
+			// 	newObj.scale.multiplyScalar(scale);
+			// 	objects.push(newObj);
+			// }
+			// now I need to find unique geometry and materials
+			if (obj.geometry) {
+				let similarBox = false;
+				for (const key in geometries) {
+					const existingBox = geometries[key].box;
+					if (obj.geometry.boundingBox?.equals(existingBox)) {
+						similarBox = true;
+					}
+				}
+				if (!similarBox) {
+					geometries[obj.uuid] = {
+						box: obj.geometry.boundingBox,
+						name: obj.name,
+						geometry: obj.geometry
+					};
+				}
+				// group by bounding boxes
+			}
+			if (obj.material) {
+				if (!(obj.material.name in materials)) {
+					materials[obj.material.name] = obj.material;
+				}
 			}
 		});
+		// console.log(geometries);
+		// console.log(materials);
+		for (const key in geometries) {
+			// match the geometry name with the material
+			const name: string = geometries[key].name;
+
+			// const color = new THREE.Color();
+			// color.setHex(Math.random() * 0xffffff);
+			// const material = new THREE.MeshStandardMaterial({ color });
+			let material;
+
+			for (const key in materials) {
+				const reg = new RegExp(key, 'g');
+				const match = name.match(reg);
+				if (match) {
+					// console.log(match);
+					material = materials[key];
+				}
+			}
+
+			const geometry = geometries[key].geometry;
+			objects.push(new THREE.Mesh(geometry, material));
+		}
+
 		for (let i = 0; i < objects.length; i++) {
 			const element = objects[i];
 			scenes.push(createScene(element, content2));
@@ -188,31 +234,35 @@
 
 		scene.add(object);
 
-		scene.add(new THREE.AmbientLight(0x404040));
+		scene.add(new THREE.AmbientLight(0x404040, 1));
 
 		const light = new THREE.DirectionalLight();
 		light.position.set(1, 1, 1);
 		light.lookAt(new THREE.Vector3(0, 0, 0));
 		scene.add(light);
 
+		const renderPixelatedPass = new RenderPixelatedPass(6, scene, camera);
+		composer.addPass(renderPixelatedPass);
+
 		return scene;
 	}
 
 	onMount(() => {
-		for (let i = 0; i < 4; i++) {
-			const geometry = geometries[(geometries.length * Math.random()) | 0];
+		// for (let i = 0; i < 4; i++) {
+		// 	const geometry = geometries[(geometries.length * Math.random()) | 0];
 
-			const material = new THREE.MeshStandardMaterial({
-				color: new THREE.Color().setHSL(Math.random(), 1, 0.75),
-				roughness: 0.5,
-				metalness: 0,
-				flatShading: true
-			});
+		// 	const material = new THREE.MeshStandardMaterial({
+		// 		color: new THREE.Color().setHSL(Math.random(), 1, 0.75),
+		// 		roughness: 0.5,
+		// 		metalness: 0,
+		// 		flatShading: true
+		// 	});
 
-			scenes.push(createScene(new THREE.Mesh(geometry, material), content));
-		}
+		// 	scenes.push(createScene(new THREE.Mesh(geometry, material), content));
+		// }
 		animate();
 		renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+		composer = new EffectComposer(renderer);
 		return () => {
 			scenes = [];
 			renderer.dispose();
