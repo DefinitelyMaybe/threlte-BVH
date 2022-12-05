@@ -121,11 +121,6 @@
 		}
 	}
 
-	function animate() {
-		render();
-		requestAnimationFrame(animate);
-	}
-
 	function render() {
 		if (!renderer || !canvas) return;
 		updateSize();
@@ -170,6 +165,7 @@
 
 			renderer.render(scene, camera);
 		});
+		requestAnimationFrame(render);
 	}
 
 	function createScene(object, dom) {
@@ -219,9 +215,8 @@
 	}
 
 	onMount(() => {
-		animate();
 		renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-		// composer = new EffectComposer(renderer);
+		render();
 		return () => {
 			scenes = [];
 			renderer.dispose();
@@ -234,7 +229,8 @@
 
 	<div class="w-full top-0 absolute">
 		<div id="info">
-			<a href="https://threejs.org">three.js</a> - multiple elements - webgl
+			<a href="https://threejs.org/examples/?q=multiple#webgl_multiple_elements"
+				>three.js | multiple elements - webgl</a>
 		</div>
 		<div class="overflow-y-auto grid grid-cols-4" bind:this={content} />
 		<div>
